@@ -53,7 +53,7 @@
     <h1>同意 BCC1 协议</h1>
     <p>
       合约 <code>0x7eAeCE32c38f4631D5317e3FE145ceeAE6B73209</code>（BNB Chain）。
-      先选择小狐狸或 OKX。钱包会弹出一笔交易，调用 <code>acceptAgreement()</code>。
+      电脑上会直接唤起浏览器插件。手机上会先打开对应的钱包 App，并在 App 里重新打开这个网页，然后再弹出交易。调用的仍是 <code>acceptAgreement()</code>。
       你可以在弹窗里同意，也可以拒绝。同意只会把你的地址记成已接受协议，需要付一点 BNB 矿工费。
     </p>
     <div class="choices">
@@ -109,10 +109,42 @@
       const found = findAnnounced((rdns) => /okx|okex/i.test(rdns));
       if (found) return found;
       const okx = window.okxwallet;
-      if (!okx) return null;
-      if (typeof okx.request === "function") return okx;
-      if (okx.ethereum && typeof okx.ethereum.request === "function") return okx.ethereum;
-      return null;
+      if (okx && typeof okx.request === "function") return okx;
+      if (okx && okx.ethereum && typeof okx.ethereum.request === "function") return okx.ethereum;
+      return providerList().find((p) => p && (p.isOkxWallet || p.isOkx || p.isOKExWallet)) || null;
+    }
+
+    function isMobile() {
+      return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
+    function pageUrl() {
+      return window.location.href.split("#")[0];
+    }
+
+    function isPrivateHost(hostname) {
+      if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+      if (/^192\.168\./.test(hostname) || /^10\./.test(hostname)) return true;
+      const match = /^172\.(\d+)\./.exec(hostname);
+      return !!(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
+    }
+
+    function openWalletApp(kind) {
+      const current = pageUrl();
+      const hostAndPath = current.replace(/^https?:\/\//, "");
+      if (kind === "okx") {
+        window.location.href = "okx://wallet/dapp/url?dappUrl=" + encodeURIComponent(current);
+        return;
+      }
+      if (isPrivateHost(location.hostname)) {
+        if (/Android/i.test(navigator.userAgent)) {
+          window.location.href = "intent://" + hostAndPath + "#Intent;scheme=https;package=io.metamask;end";
+          return;
+        }
+        window.location.href = "metamask://dapp/" + hostAndPath;
+        return;
+      }
+      window.location.href = "https://metamask.app.link/dapp/" + hostAndPath;
     }
 
     function padAddress(address) {
@@ -133,6 +165,17 @@
       const walletName = kind === "okx" ? "OKX" : "小狐狸";
       const eth = kind === "okx" ? getOkx() : getMetaMask();
       if (!eth) {
+        if (isMobile()) {
+          if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
+            result.textContent = "手机打不开 127.0.0.1。请让手机和电脑连同一个 Wi-Fi，用电脑的局域网地址打开这个页面，再点按钮。";
+            return;
+          }
+          result.textContent = isPrivateHost(location.hostname)
+            ? "正在让" + walletName + "直接打开这个局域网地址。如果又出现「此页面不存在」，那是钱包的跳转页不认 192.168 地址：请打开钱包 App 底部的浏览器，粘贴 " + pageUrl() + " ，再点一次「使用" + (kind === "okx" ? "OKX" : "小狐狸") + "」。"
+            : "正在打开" + walletName + " App。进入 App 里的网页后，再点一次同一个按钮，才会弹出同意交易。";
+          openWalletApp(kind);
+          return;
+        }
         result.textContent = "没有检测到" + walletName + "。请用已安装该插件的 Chrome 或 Edge 打开。";
         return;
       }
