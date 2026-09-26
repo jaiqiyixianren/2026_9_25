@@ -25,7 +25,7 @@
     p { margin: 0 0 14px; color: #c8c2b6; line-height: 1.55; }
     code { color: #f4e3b2; word-break: break-all; }
     .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    button {
+    button, a.choice {
       width: 100%;
       height: 44px;
       border: 0;
@@ -35,9 +35,14 @@
       font: inherit;
       font-weight: 700;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      box-sizing: border-box;
     }
-    button.alt { background: #111; color: #f4f1ea; border: 1px solid #ffffff33; }
-    button:disabled { opacity: 0.6; cursor: wait; }
+    button.alt, a.choice.alt { background: #111; color: #f4f1ea; border: 1px solid #ffffff33; }
+    button:disabled, a.choice.disabled { opacity: 0.6; cursor: wait; pointer-events: none; }
     #result {
       margin-top: 16px;
       padding: 12px 14px;
@@ -57,8 +62,8 @@
       你可以在弹窗里同意，也可以拒绝。同意只会把你的地址记成已接受协议，需要付一点 BNB 矿工费。
     </p>
     <div class="choices">
-      <button id="metamask" type="button">使用小狐狸</button>
-      <button id="okx" class="alt" type="button">使用 OKX</button>
+      <a id="metamask" class="choice" href="#">使用小狐狸</a>
+      <a id="okx" class="choice alt" href="#">使用 OKX</a>
     </div>
     <div id="result">还没有连接。</div>
   </main>
@@ -129,22 +134,14 @@
       return !!(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
     }
 
-    function openWalletApp(kind) {
+    function walletHref(kind) {
       const current = pageUrl();
       const hostAndPath = current.replace(/^https?:\/\//, "");
       if (kind === "okx") {
-        window.location.href = "okx://wallet/dapp/url?dappUrl=" + encodeURIComponent(current);
-        return;
+        const deeplink = "okx://wallet/dapp/url?dappUrl=" + encodeURIComponent(current);
+        return "https://www.okx.com/download?deeplink=" + encodeURIComponent(deeplink);
       }
-      if (isPrivateHost(location.hostname)) {
-        if (/Android/i.test(navigator.userAgent)) {
-          window.location.href = "intent://" + hostAndPath + "#Intent;scheme=https;package=io.metamask;end";
-          return;
-        }
-        window.location.href = "metamask://dapp/" + hostAndPath;
-        return;
-      }
-      window.location.href = "https://metamask.app.link/dapp/" + hostAndPath;
+      return "https://metamask.app.link/dapp/" + hostAndPath;
     }
 
     function padAddress(address) {
@@ -166,20 +163,14 @@
       const eth = kind === "okx" ? getOkx() : getMetaMask();
       if (!eth) {
         if (isMobile()) {
-          if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
-            result.textContent = "手机打不开 127.0.0.1。请让手机和电脑连同一个 Wi-Fi，用电脑的局域网地址打开这个页面，再点按钮。";
-            return;
-          }
-          result.textContent = isPrivateHost(location.hostname)
-            ? "正在让" + walletName + "直接打开这个局域网地址。如果又出现「此页面不存在」，那是钱包的跳转页不认 192.168 地址：请打开钱包 App 底部的浏览器，粘贴 " + pageUrl() + " ，再点一次「使用" + (kind === "okx" ? "OKX" : "小狐狸") + "」。"
-            : "正在打开" + walletName + " App。进入 App 里的网页后，再点一次同一个按钮，才会弹出同意交易。";
-          openWalletApp(kind);
+          result.textContent = "正在打开" + walletName + "。进入 App 里的这个网页后，再点一次同一个按钮。";
+          window.location.href = walletHref(kind);
           return;
         }
         result.textContent = "没有检测到" + walletName + "。请用已安装该插件的 Chrome 或 Edge 打开。";
         return;
       }
-      buttons.forEach((btn) => { btn.disabled = true; });
+      buttons.forEach((btn) => { btn.classList.add("disabled"); });
       try {
         const accounts = await eth.request({ method: "eth_requestAccounts" });
         const account = accounts[0];
@@ -214,12 +205,23 @@
         }
         result.textContent = (err && err.message) ? err.message : "操作已取消。";
       } finally {
-        buttons.forEach((btn) => { btn.disabled = false; });
+        buttons.forEach((btn) => { btn.classList.remove("disabled"); });
       }
     }
 
-    document.getElementById("metamask").onclick = () => connect("metamask");
-    document.getElementById("okx").onclick = () => connect("okx");
+    const metamaskLink = document.getElementById("metamask");
+    const okxLink = document.getElementById("okx");
+    metamaskLink.href = walletHref("metamask");
+    okxLink.href = walletHref("okx");
+
+    function onChoose(event, kind) {
+      const eth = kind === "okx" ? getOkx() : getMetaMask();
+      if (!eth && isMobile()) return;
+      event.preventDefault();
+      connect(kind);
+    }
+    metamaskLink.addEventListener("click", (event) => onChoose(event, "metamask"));
+    okxLink.addEventListener("click", (event) => onChoose(event, "okx"));
   </script>
 </body>
 </html>
